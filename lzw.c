@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "bitstream.c"
+
 typedef struct {
 	int prefix;
 	uint8_t byte;
@@ -71,6 +73,9 @@ int dict_copy_val(dict_t *d, int index, char *dest) {
 
 int lzw_encode(char *in, size_t in_size, int *out) {
 	char *src = in; // save for debug
+
+	int index_bits = 9;
+	int max_index = (1 << index_bits) - 1;
 
 	dict_t dict;
 	init_dict(&dict);
@@ -150,41 +155,4 @@ size_t lzw_decode(int *data, int datas, char *out) {
 	#endif
 
 	return rc;
-}
-
-// end //
-
-#include <assert.h>
-
-int enc_buf[4096];
-char res_buf[4096];
-void assert_lzw(char *plain) {
-	memset(enc_buf, '$', sizeof(enc_buf));
-	memset(res_buf, '#', sizeof(res_buf));
-	size_t esz = lzw_encode(plain, strlen(plain), enc_buf);
-	lzw_decode(enc_buf, esz, res_buf);
-
-	char *input = plain;
-	char *output = &res_buf[0];
-	while (*input) {
-		if (*input++ != *output++) {
-			res_buf[4095] = 0;
-			return;
-		}
-	}
-	fprintf(stderr, "PASSED TEST: \"%s\" == \"%s\"\n", plain, res_buf);
-}
-
-int main(int argc, char **argv) {
-	assert_lzw("ababcbababaaaaaaa");
-	assert_lzw("A circular buffer, or ring buffer, is a FIFO container consisting of a fixed-size buffer and head & tail indices. The head index is incremented as items are added and the tail index when items are removed.");
-
-	void *ibuff = malloc(10000000);
-	void *obuff = malloc(10000000);
-	int *ebuff = malloc(10000000);
-	size_t rsz = read(STDIN_FILENO, ibuff, 10000000);
-	size_t esz = lzw_encode(ibuff, rsz, ebuff);
-	lzw_decode(ebuff, esz, obuff);
-	write(STDOUT_FILENO, obuff, rsz);
-	fprintf(stderr, "input size: %lu; compressed size: %lu; rate: %f\n", rsz, esz, (float)esz/(float)rsz);
 }
