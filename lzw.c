@@ -7,6 +7,8 @@
 
 #include "bitstream.c"
 
+#define MEGABYTE 1000000
+
 typedef struct {
 	int prefix;
 	uint8_t byte;
@@ -18,7 +20,7 @@ typedef struct {
 } dict_t;
 
 void init_dict(dict_t *d) {
-	d->data = malloc(0x10000);
+	d->data = malloc(10 * MEGABYTE);
 	for (int b = 0; b < 256; b++) {
 		dict_entry_t *entry = d->data + b;
 		entry->prefix = -1;
@@ -71,16 +73,16 @@ int dict_copy_val(dict_t *d, int index, char *dest) {
 	return count;
 }
 
-int lzw_encode(char *in, size_t in_size, int *out) {
+int lzw_encode(char *in, size_t in_size, void *out) {
 	char *src = in; // save for debug
 
+	bitstream_t stream = {};
+	stream.data = out;
 	int index_bits = 9;
-	int max_index = (1 << index_bits) - 1;
 
 	dict_t dict;
 	init_dict(&dict);
 
-	int outc = 0;
 	int index = -1;
 	for (size_t i = 0; i < in_size; i++) {
 		uint8_t b = in[i];
@@ -91,14 +93,23 @@ int lzw_encode(char *in, size_t in_size, int *out) {
 		} else {
 			dict_put(&dict, index, b);
 			// fprintf(stderr, "PUT\t'%c'(%d)\t'%c'(%d)\n", index,index, b,b);
-			out[outc++] = index;
+			if (dict.size >= ((1 << index_bits) - 1)) {
+				index_bits++;
+				fprintf(stderr, "WRITE index_bits=%d\n", index_bits);
+			}
+			write_bits(&stream, index_bits, index);
 			index = b;
 		}
 	}
-	if (index >= 0)
-		out[outc++] = index;
+	if (index >= 0) {
+		if (index > ((1 << index_bits) - 1)) {
+			index_bits++;
+			fprintf(stderr, "WRITE index_bits=%d\n", index_bits);
+		}
+		write_bits(&stream, index_bits, index);
+	}
 
-	#if 1
+#if 0
 	fprintf(stderr, "in: \"%s\"(%lu)\n", src, strlen(src));
 	char buf[1024];
 	memset(buf, 'z', 1024);
@@ -109,33 +120,48 @@ int lzw_encode(char *in, size_t in_size, int *out) {
 		fprintf(stderr, "- @%d\t%d%c\t%s\n", i - 255, e.prefix, e.byte, buf);
 	}
 
+#if 0
 	fprintf(stderr, "out: ");
 	for (int i = 0; i < outc; i++)
 		fprintf(stderr, "%d ", out[i]);
 	fprintf(stderr, "\n");
-	#endif
+#endif
+#endif
 
-	return outc;
+	return stream.index + 1;
 }
 
-size_t lzw_decode(int *data, int datas, char *out) {
+size_t lzw_decode(void *data, int datas, char *out) {
 	char *res = out;
-	size_t rc = 0;
+	int rc = 0;
 
 	dict_t dict = {};
 	init_dict(&dict);
-	int index = data[0];
+
+	bitstream_t stream = {};
+	stream.data = data;
+	int index_bits = 9;
+
+	int index = read_bits(&stream, index_bits);
 	res[rc++] = index;
 	int old = index;
-	for (int i = 1; i < datas; i++) {
-		int index = data[i];
+	while (stream.index < datas) {
+		index = read_bits(&stream, index_bits);
 		if (index >= 0 && index < dict.size) {
 			rc += dict_copy_val(&dict, index, res + rc);
 			uint8_t b = dict_first_byte(&dict, index);
 			dict_put(&dict, old, b);
+			if (dict.size >= ((1 << index_bits) - 3)) {
+				index_bits++;
+				fprintf(stderr, "READ index_bits=%d\n", index_bits);
+			}
 		} else {
 			uint8_t b = dict_first_byte(&dict, old);
 			dict_put(&dict, old, b);
+			if (dict.size >= ((1 << index_bits) - 3)) {
+				index_bits++;
+				fprintf(stderr, "READ index_bits=%d\n", index_bits);
+			}
 			rc += dict_copy_val(&dict, dict.size - 1, res + rc);
 		}
 		old = index;
