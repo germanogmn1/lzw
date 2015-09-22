@@ -19,8 +19,8 @@ typedef struct {
 	dict_entry_t *data;
 } dict_t;
 
-void init_dict(dict_t *d) {
-	d->data = malloc(10 * MEGABYTE);
+static void init_dict(dict_t *d) {
+	d->data = malloc(100 * MEGABYTE);
 	for (int b = 0; b < 256; b++) {
 		dict_entry_t *entry = d->data + b;
 		entry->prefix = -1;
@@ -29,13 +29,13 @@ void init_dict(dict_t *d) {
 	d->size = 256;
 }
 
-void dict_put(dict_t *d, int prefix, uint8_t byte) {
+static void dict_put(dict_t *d, int prefix, uint8_t byte) {
 	dict_entry_t *e = d->data + d->size++;
 	e->prefix = prefix;
 	e->byte = byte;
 }
 
-int dict_find(dict_t *d, int prefix, uint8_t byte) {
+static int dict_find(dict_t *d, int prefix, uint8_t byte) {
 	for (int i = 0; i < d->size; i++) {
 		dict_entry_t entry = d->data[i];
 		if (entry.prefix == prefix && entry.byte == byte) {
@@ -45,14 +45,14 @@ int dict_find(dict_t *d, int prefix, uint8_t byte) {
 	return -1;
 }
 
-uint8_t dict_first_byte(dict_t* d, int index) {
+static uint8_t dict_first_byte(dict_t* d, int index) {
 	dict_entry_t e = d->data[index];
 	while (e.prefix >= 0)
 		e = d->data[e.prefix];
 	return e.byte;
 }
 
-int dict_copy_val(dict_t *d, int index, char *dest) {
+static int dict_copy_val(dict_t *d, int index, char *dest) {
 	int count = 0;
 	int i = index;
 	while (i >= 0) {
@@ -73,7 +73,7 @@ int dict_copy_val(dict_t *d, int index, char *dest) {
 	return count;
 }
 
-int lzw_encode(char *in, size_t in_size, void *out) {
+size_t lzw_encode(char *in, size_t in_size, void *out) {
 	char *src = in; // save for debug
 
 	bitstream_t stream = {};
@@ -133,7 +133,7 @@ int lzw_encode(char *in, size_t in_size, void *out) {
 
 size_t lzw_decode(void *data, int datas, char *out) {
 	char *res = out;
-	int rc = 0;
+	size_t rc = 0;
 
 	dict_t dict = {};
 	init_dict(&dict);
@@ -168,7 +168,7 @@ size_t lzw_decode(void *data, int datas, char *out) {
 	}
 	res[rc] = '\0';
 
-	#if 0
+#if 0
 	fprintf(stderr, "decoded: \"%s\"(%lu)\n", res, strlen(res));
 	char buf[1024];
 	memset(buf, 'z', 1024);
@@ -178,7 +178,7 @@ size_t lzw_decode(void *data, int datas, char *out) {
 		buf[end] = 0;
 		fprintf(stderr, "- @%d\t%d%c\t%s\n", i - 255, e.prefix, e.byte, buf);
 	}
-	#endif
+#endif
 
 	return rc;
 }

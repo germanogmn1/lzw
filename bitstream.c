@@ -29,14 +29,14 @@ void write_bits(bitstream_t *s, int bits, int num) {
 
 int extract_bits(uint8_t byte, int low_bit, int high_bit) {
 	int mask = (~((1 << low_bit) - 1)) & ((1 << (high_bit)) - 1);
-	// printf("extracting %d:%d from 0x%X = %d (mask=%d)\n", low_bit, high_bit, byte, (byte & mask) >> low_bit, mask);
+	// fprintf(stderr, "extracting %d:%d from 0x%X = %d (mask=%d)\n", low_bit, high_bit, byte, (byte & mask) >> low_bit, mask);
 	return (byte & mask) >> low_bit;
 }
 
 int read_bits(bitstream_t *s, int bits_to_read) {
 	int result = 0;
 	int result_bit = 0;
- int bits = bits_to_read; // debug
+	int bits = bits_to_read; // debug
 	while (bits_to_read) {
 		int high_bit = s->bit + bits_to_read;
 		int high_bit_clamped = (high_bit < 8) ? high_bit : 8;
@@ -47,7 +47,7 @@ int read_bits(bitstream_t *s, int bits_to_read) {
 		result_bit += written;
 		bits_to_read -= written;
 
-		// printf("result_bit = %d, bits = %d\n", result_bit, bits);
+		// fprintf(stderr, "result_bit = %d, bits = %d\n", result_bit, bits);
 
 		if (high_bit_clamped == 8) {
 			s->index++;
